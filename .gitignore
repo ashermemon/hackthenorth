@@ -15,10 +15,8 @@ xcuserdata/
 # Secrets — copy Core/Secrets.example.swift to Core/Secrets.swift and fill in locally
 App/Blind Sight/Core/Secrets.swift
 
-# Firmware (ESP-IDF build output, per-machine config, downloaded components)
-sdkconfig
-sdkconfig.old
-managed_components/
+# Firmware: your Personal Hotspot name and password. Copy secrets.example.h to secrets.h.
+firmware/belt_arduino/secrets.h
 
 # Python
 __pycache__/

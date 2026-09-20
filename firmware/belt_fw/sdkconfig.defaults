@@ -1,2 +1,0 @@
-# DOIT ESP32 DevKit V1 ships with 4 MB of flash
-CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

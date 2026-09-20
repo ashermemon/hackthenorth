@@ -8,13 +8,15 @@ Change it only by agreeing on both sides.
 | | |
 |---|---|
 | Protocol | UDP, phone → ESP32, one-way (no reply) |
-| ESP32 network | ESP32 hosts its own WiFi access point |
-| ESP32 IP | `192.168.4.1` (ESP-IDF SoftAP default) |
+| ESP32 network | ESP32 joins the phone's Personal Hotspot as a client |
+| ESP32 IP | `172.20.10.13`, fixed (an iPhone hotspot is always `172.20.10.0/28`, phone at `.1`) |
 | UDP port | `4210` |
 | Send rate | ~5 Hz (a few times per second) |
 
-The phone stays joined to the ESP32's AP for the belt link and uses cellular for
-ElevenLabs / Gemini. The AP has no internet, so iOS will show "No Internet Connection".
+The phone hosts the hotspot, so it keeps cellular for ElevenLabs / Gemini and the belt link
+needs no separate WiFi network. Personal Hotspot must be on, with **Maximize Compatibility**
+enabled (the ESP32 is 2.4 GHz only). The fixed address is set in
+`firmware/belt_arduino/belt_config.h` and mirrored in `AppConfig.esp32Host`; keep the two in step.
 
 ## Payload: 6 bytes, binary
 
@@ -38,13 +40,14 @@ Zone value: `0` = motor off, `255` = strongest. Closer obstacle = higher value.
   **Exception:** if nothing has been applied for `HOLD_MS`, the belt is already silent, so the
   next valid packet is accepted whatever its `seq`. Without this, restarting the phone app
   (`seq` back at 0) would leave the belt ignoring packets for up to 128 updates.
-  Implemented and unit-tested in `firmware/belt_fw/main/belt_protocol.c`.
+  Implemented and unit-tested in `firmware/belt_arduino/belt_protocol.h`.
 - Every valid packet replaces the whole 4-zone state.
 - No valid packet for `HOLD_MS` (default 500 ms) → all motors off.
 
-## Open items (fill in after the PWM bench test)
+## Open items (measure on the real belt)
 
-- Minimum duty at which the motors actually vibrate (dead zone): **TBD**.
-  Proposal: the phone maps distance → `[min_effective, 255]`, and the firmware stays
-  dumb except for a safety cap on max duty.
-- Max duty cap for motor protection: **TBD**.
+- Minimum duty at which the motors actually vibrate (dead zone): **TBD**. Find it with the
+  app's debug screen: manual mode, raise one motor until it buzzes going up, and note where it
+  stops going down. The phone maps distance → `[min_effective, 255]` (`BeltTuning.minFeltDuty`,
+  currently a placeholder of 60), and the firmware stays dumb except for a safety cap on max duty.
+- Max duty cap for motor protection (`BELT_MAX_DUTY`, currently 255): **TBD**.
