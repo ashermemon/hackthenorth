@@ -1,9 +1,13 @@
 # Belt firmware (Arduino)
 
-The ESP32 is a pure motor driver: it joins the phone's Personal Hotspot, listens for the app's
-6-byte UDP packets ([docs/PACKET_SPEC.md](../../docs/PACKET_SPEC.md)), and drives four L298N
-inputs with PWM. It makes no decisions.
+The ESP32 is a motor driver: it joins the phone's Personal Hotspot, listens for the app's 6-byte
+UDP packets ([docs/PACKET_SPEC.md](../../docs/PACKET_SPEC.md)), and drives four L298N inputs with
+PWM. The phone decides *what is near*; this decides only *how to buzz it*.
 
+- **How it buzzes:** each zone byte is **urgency**. `0` is off, `255` is a solid buzz, and `1`–`254`
+  make that motor **pulse**, from 1 per second (far) up to 6 per second (close). Every pulse is the
+  same length and the same strength; only the gap between pulses shrinks as things get closer. So a
+  pulse always starts crisply, at any rotor angle, with no weak-signal dead zone.
 - **Network:** joins your hotspot as a client at the fixed address `172.20.10.13`, UDP port `4210`.
 - **Failsafe:** no valid packet for 500 ms → every motor off. That covers a missed packet (nothing
   changes for one), and a dead phone, app or link (the belt goes quiet by itself).
@@ -87,14 +91,29 @@ python3 tools/send_fake_zones.py garbage          # malformed packets: motors mu
 ```
 
 Check on the belt and the monitor: the LED goes solid while the script runs; the motors stop about
-half a second after Ctrl+C; 30% loss doesn't make the buzz flicker; restarting the script mid-run
-makes the belt respond again straight away.
+half a second after Ctrl+C; 30% loss doesn't make the pulses stutter; restarting the script mid-run
+makes the belt respond again straight away. (`sweep` shows the pulses speeding up to solid on each
+motor in turn.)
 
-## Find the weakest buzz you can feel
+## Tune the feel
 
-Open the app's debug screen, turn on **manual mode**, and raise one motor's slider until you feel
-it buzz; note where it stops when you lower it again. Put that number in
-`BeltTuning.minFeltDuty` (currently a placeholder of 60).
+Everything is a constant at the top of [belt_config.h](belt_config.h), and none of it has been
+verified on the real belt yet. Change one, re-flash, and feel it.
+
+| Constant | Now | What it does |
+|---|---|---|
+| `BELT_PULSE_DUTY` | 200 | How hard the motor runs during a pulse (0–255). Lower it if it's too harsh, or if the motors overheat. |
+| `BELT_PULSE_ON_MS` | 90 | Length of every pulse. |
+| `BELT_PULSE_MIN_HZ` | 1 | Pulses per second for a far obstacle. |
+| `BELT_PULSE_MAX_HZ` | 6 | Pulses per second just before solid. Above ~6–7 the motor's spin-up and spin-down blur pulses into a continuous buzz. |
+| `BELT_PULSE_MIN_GAP_MS` | 60 | The rest between pulses never goes below this. |
+| `BELT_PWM_FREQ_HZ` | 10000 | The motor-drive carrier (not the pulse rate). |
+| `BELT_MAX_DUTY` | 255 | Hard safety cap on motor strength. |
+
+To try it with no obstacle handy, open the app's debug screen, turn on **manual mode**, and drag a
+zone's slider: at 0 the motor is off, then it pulses faster as you drag up, and 255 is solid. **Sweep test**
+does that for each motor in turn. The distance-to-urgency range (solid at 0.5 m or closer, silent
+at 2.0 m or beyond) is `BeltTuning` in the app, and the sliders on the debug screen change it live.
 
 ## Troubleshooting
 
@@ -107,7 +126,8 @@ it buzz; note where it stops when you lower it again. Put that number in
 
 ## Tests
 
-The packet parsing and the accept/reject rule are plain C++, tested on the Mac:
+The packet parsing, the accept/reject rule and the pulse timing are plain C++, tested on the Mac
+(the pulse tests simulate the clock a millisecond at a time):
 
 ```sh
 firmware/belt_arduino/test_host/run.sh

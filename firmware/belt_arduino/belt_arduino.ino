@@ -2,7 +2,8 @@
  * Belt firmware: the ESP32 is a pure motor driver. The phone decides; this just obeys.
  *
  * Joins the phone's Personal Hotspot, listens for 6-byte UDP packets (docs/PACKET_SPEC.md), and
- * drives the four L298N inputs with PWM. If no valid packet arrives for BELT_HOLD_MS, every motor
+ * drives the four L298N inputs with PWM. Each zone's byte is an urgency that sets how fast that
+ * motor pulses (belt_pulse.h). If no valid packet arrives for BELT_HOLD_MS, every motor
  * goes off, which is both "hold the last state briefly instead of zeroing on one missed packet"
  * and the failsafe for a dead phone, app or link. Needs the Arduino-ESP32 core 3.x (uses the
  * ledcAttach(pin, freq, bits) API).
@@ -12,6 +13,7 @@
 
 #include "belt_config.h"
 #include "belt_protocol.h"
+#include "belt_pulse.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -29,19 +31,36 @@ uint8_t lastSeq = 0;          // seq of the last applied packet
 uint32_t lastAppliedMs = 0;   // when it was applied
 bool motorsActive = false;
 
+uint8_t urgency[BELT_ZONE_COUNT] = {0, 0, 0, 0};  // latest per-zone urgency from the phone
+BeltPulse pulses[BELT_ZONE_COUNT];
+bool motorOn[BELT_ZONE_COUNT] = {false, false, false, false};
+
 uint32_t rejectedCount = 0;   // malformed datagrams
 uint32_t droppedCount = 0;    // valid but out-of-order packets
 
-void setMotors(const uint8_t zones[BELT_ZONE_COUNT]) {
-  for (int z = 0; z < BELT_ZONE_COUNT; z++) {
-    uint32_t duty = zones[z];
-    if (duty > BELT_MAX_DUTY) duty = BELT_MAX_DUTY;
-    ledcWrite(BELT_ZONE_GPIOS[z], duty);
-  }
+// Motor strength while a zone is pulsing (or solid), limited to the safety cap.
+uint32_t pulseDuty() {
+  return BELT_PULSE_DUTY > BELT_MAX_DUTY ? BELT_MAX_DUTY : BELT_PULSE_DUTY;
 }
 
 void motorsOff() {
-  for (int z = 0; z < BELT_ZONE_COUNT; z++) ledcWrite(BELT_ZONE_GPIOS[z], 0);
+  for (int z = 0; z < BELT_ZONE_COUNT; z++) {
+    urgency[z] = BELT_URGENCY_OFF;
+    motorOn[z] = false;
+    ledcWrite(BELT_ZONE_GPIOS[z], 0);
+  }
+}
+
+// Runs every loop: turns each zone's urgency into on/off and writes the motor only on a change.
+void servicePulses() {
+  const uint32_t now = millis();
+  for (int z = 0; z < BELT_ZONE_COUNT; z++) {
+    const bool on = pulses[z].update(now, urgency[z]);
+    if (on != motorOn[z]) {
+      motorOn[z] = on;
+      ledcWrite(BELT_ZONE_GPIOS[z], on ? pulseDuty() : 0);
+    }
+  }
 }
 
 void startWifi() {
@@ -114,7 +133,7 @@ void servicePackets() {
   haveLast = true;
   lastSeq = packet.seq;
   lastAppliedMs = now;
-  setMotors(packet.zones);
+  memcpy(urgency, packet.zones, BELT_ZONE_COUNT);
   if (!motorsActive) Serial.println("Phone link live.");
   motorsActive = true;
 }
@@ -159,6 +178,7 @@ void loop() {
   serviceWifi();
   if (WiFi.status() == WL_CONNECTED) servicePackets();
   serviceHoldTimeout();
+  servicePulses();
   serviceLed();
   delay(1);  // yield; costs at most 1 ms of latency
 }

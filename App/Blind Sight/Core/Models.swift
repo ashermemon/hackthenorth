@@ -16,7 +16,7 @@ enum BeltZone: Int, CaseIterable {
 }
 
 /// One update cycle's belt intensities. Mirrors the ESP32 packet shape from the PRD:
-/// `{ zones: [z0, z1, z2, z3] }`, each a 0–255 PWM duty cycle, left hip → right hip.
+/// `{ zones: [z0, z1, z2, z3] }`, each a 0–255 urgency (0 off, 1–254 pulse faster, 255 solid), left hip → right hip.
 struct BeltCommand {
     var intensities: [BeltZone: UInt8]
 

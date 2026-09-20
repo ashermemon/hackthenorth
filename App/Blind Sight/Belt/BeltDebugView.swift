@@ -45,7 +45,7 @@ struct BeltDebugView: View {
     }
 
     private var zonesSection: some View {
-        section("Zones (distance, buzz strength sent)") {
+        section("Zones (distance, urgency sent: 0 off, pulses faster, 255 solid)") {
             ForEach(0..<DepthProcessor.zoneCount, id: \.self) { zone in
                 HStack {
                     Text(Self.zoneNames[zone]).frame(width: 96, alignment: .leading)
@@ -53,14 +53,14 @@ struct BeltDebugView: View {
                         ZStack(alignment: .leading) {
                             Capsule().fill(.quaternary)
                             Capsule().fill(.tint)
-                                .frame(width: geometry.size.width * CGFloat(belt.duties[zone]) / 255)
+                                .frame(width: geometry.size.width * CGFloat(belt.urgencies[zone]) / 255)
                         }
                     }
                     .frame(height: 14)
                     Text(distanceText(belt.distances[zone]))
                         .monospacedDigit()
                         .frame(width: 64, alignment: .trailing)
-                    Text("\(belt.duties[zone])")
+                    Text("\(belt.urgencies[zone])")
                         .monospacedDigit()
                         .frame(width: 34, alignment: .trailing)
                 }
@@ -88,7 +88,7 @@ struct BeltDebugView: View {
 
     private var tuningSection: some View {
         section("Tuning") {
-            slider("Full buzz at", value: floatBinding(\.nearMeters), range: 0.25...2, unit: "m", format: "%.2f")
+            slider("Solid buzz at", value: floatBinding(\.nearMeters), range: 0.25...2, unit: "m", format: "%.2f")
             slider("Silent beyond", value: floatBinding(\.farMeters), range: 1...4, unit: "m", format: "%.2f")
             slider("Phone height above floor", value: floatBinding(\.cameraHeightMeters), range: 0.8...1.6, unit: "m", format: "%.2f")
             slider("Ignore above phone", value: floatBinding(\.overheadClearanceMeters), range: 0.3...1.2, unit: "m", format: "%.2f")
@@ -101,32 +101,28 @@ struct BeltDebugView: View {
                 Text("5 readings").tag(5)
             }
             .pickerStyle(.segmented)
-            slider("Weakest felt buzz", value: Binding(
-                get: { Double(belt.tuning.minFeltDuty) },
-                set: { belt.tuning.minFeltDuty = UInt8($0) }
-            ), range: 0...200, unit: "", format: "%.0f")
         }
     }
 
     private var manualSection: some View {
         section("Manual / test") {
-            Toggle("Send these values, ignore depth", isOn: Binding(
-                get: { belt.manualDuties != nil },
-                set: { belt.manualDuties = $0 ? [0, 0, 0, 0] : nil }
+            Toggle("Send these urgency values, ignore depth", isOn: Binding(
+                get: { belt.manualUrgencies != nil },
+                set: { belt.manualUrgencies = $0 ? [0, 0, 0, 0] : nil }
             ))
-            if belt.manualDuties != nil {
+            if belt.manualUrgencies != nil {
                 ForEach(0..<DepthProcessor.zoneCount, id: \.self) { zone in
                     slider(Self.zoneNames[zone], value: Binding(
-                        get: { Double(belt.manualDuties?[zone] ?? 0) },
+                        get: { Double(belt.manualUrgencies?[zone] ?? 0) },
                         set: {
-                            var values = belt.manualDuties ?? [0, 0, 0, 0]
+                            var values = belt.manualUrgencies ?? [0, 0, 0, 0]
                             values[zone] = UInt8($0)
-                            belt.manualDuties = values
+                            belt.manualUrgencies = values
                         }
                     ), range: 0...255, unit: "", format: "%.0f")
                 }
             }
-            Button("Sweep test (each motor 0 to full)") { belt.runSweepTest() }
+            Button("Sweep test (each motor: slow pulses up to solid)") { belt.runSweepTest() }
                 .buttonStyle(.bordered)
         }
     }

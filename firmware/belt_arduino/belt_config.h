@@ -29,11 +29,24 @@
 // GPIOs wired to L298N IN1..IN4, in zone order: left hip, left pocket, right pocket, right hip.
 static const int BELT_ZONE_GPIOS[4] = {33, 25, 26, 27};
 
-// PWM. 5 kHz is above where PWM ripple is felt as vibration, and low enough for the L298N (a slow
-// driver) to switch cleanly. If the whine bothers you, try 20 kHz and check the buzz stays strong.
-#define BELT_PWM_FREQ_HZ 5000
-#define BELT_PWM_RESOLUTION_BITS 8  // duty 0..255, the packet's scale
-// Safety cap on duty, in case a motor turns out to be rated lower than the supply gives it.
+// PWM carrier for the motor drive (not the pulse rate below). 10 kHz is above where PWM ripple is
+// felt, mostly above motor noise, and well within what the L298N (a slow driver) switches cleanly.
+#define BELT_PWM_FREQ_HZ 10000
+#define BELT_PWM_RESOLUTION_BITS 8  // duty 0..255
+
+// ---- Feel: pulses, not strength -------------------------------------------------------------
+// The byte the phone sends per zone is URGENCY, not motor strength: 0 = off, 255 = solid buzz, and
+// 1..254 = pulses that come faster the closer the obstacle. Every pulse drives the motor at the
+// same strength, so it always starts crisply, at any rotor angle, with no dead zone to tune.
+// (belt_pulse.h has the details.)
+#define BELT_PULSE_DUTY 200    // motor strength during a pulse (and while solid), 0..255. Tune by feel.
+#define BELT_PULSE_ON_MS 90    // length of each pulse; the gap between pulses is what changes
+#define BELT_PULSE_MIN_HZ 1.0f // slowest pulse rate (obstacle at the edge of range)
+#define BELT_PULSE_MAX_HZ 6.0f // fastest before pulses blur together: a motor takes ~50-100 ms to
+                               // spin up and down
+#define BELT_PULSE_MIN_GAP_MS 60  // never rest less than this between pulses, whatever the rate
+// Safety cap on motor strength, in case a motor turns out to be rated lower than the supply
+// gives it. BELT_PULSE_DUTY is limited to this.
 #define BELT_MAX_DUTY 255
 
 // ---- Status LED ----------------------------------------------------------------------------

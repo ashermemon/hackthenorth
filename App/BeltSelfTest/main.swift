@@ -204,28 +204,46 @@ do { // camera pointing straight down has no defined forward: report nothing rat
     for z in 0..<4 { expectNil(zones, z, "pointing straight down") }
 }
 
-// MARK: - Intensity mapping
+// MARK: - Intensity mapping (distance -> urgency: 0 off, 1...254 pulse rate, 255 solid)
 
-print("Intensity mapping")
+print("Urgency mapping")
 
-check(IntensityMapper.duty(forDistance: nil, tuning: tuning) == 0, "nil distance -> 0")
-check(IntensityMapper.duty(forDistance: tuning.farMeters, tuning: tuning) == 0, "at far threshold -> 0")
-check(IntensityMapper.duty(forDistance: 9, tuning: tuning) == 0, "beyond far -> 0")
-check(IntensityMapper.duty(forDistance: tuning.nearMeters, tuning: tuning) == 255, "at near threshold -> 255")
-check(IntensityMapper.duty(forDistance: 0.1, tuning: tuning) == 255, "closer than near -> 255")
-check(IntensityMapper.duty(forDistance: tuning.farMeters - 0.01, tuning: tuning) >= tuning.minFeltDuty, "just inside far starts at the felt threshold")
+check(IntensityMapper.urgency(forDistance: nil, tuning: tuning) == 0, "nil distance -> 0 (off)")
+check(IntensityMapper.urgency(forDistance: tuning.farMeters, tuning: tuning) == 0, "at far threshold -> 0")
+check(IntensityMapper.urgency(forDistance: 9, tuning: tuning) == 0, "beyond far -> 0")
+check(IntensityMapper.urgency(forDistance: tuning.nearMeters, tuning: tuning) == 255, "at near threshold -> 255 (solid)")
+check(IntensityMapper.urgency(forDistance: 0.1, tuning: tuning) == 255, "closer than near -> 255 (solid)")
+check(IntensityMapper.urgency(forDistance: tuning.farMeters - 0.001, tuning: tuning) == tuning.minUrgency, "right at the far edge -> slowest pulses (minUrgency)")
+check(IntensityMapper.urgency(forDistance: tuning.farMeters - 0.01, tuning: tuning) >= 1, "a real obstacle never maps to 0 (off)")
+do {
+    let justOutsideNear = IntensityMapper.urgency(forDistance: tuning.nearMeters + 0.01, tuning: tuning)
+    check(justOutsideNear >= 250 && justOutsideNear <= 254, "just outside near -> fastest pulses, still not solid (got \(justOutsideNear))")
+}
 do {
     var previous: UInt8 = 0
     var monotonic = true
-    for d in stride(from: tuning.farMeters - 0.1, through: tuning.nearMeters, by: -0.05) {
-        let duty = IntensityMapper.duty(forDistance: d, tuning: tuning)
-        if duty < previous { monotonic = false }
-        previous = duty
+    var neverSolidEarly = true
+    for d in stride(from: tuning.farMeters - 0.1, to: tuning.nearMeters, by: -0.05) {
+        let urgency = IntensityMapper.urgency(forDistance: d, tuning: tuning)
+        if urgency < previous { monotonic = false }
+        if urgency == 255 { neverSolidEarly = false }
+        previous = urgency
     }
-    check(monotonic, "closer never gives a weaker buzz")
+    check(monotonic, "closer never gives lower urgency")
+    check(neverSolidEarly, "solid (255) is reserved for the near limit")
 }
-check(IntensityMapper.duty(forDistance: 1.2, tuning: tuning) > tuning.minFeltDuty
-      && IntensityMapper.duty(forDistance: 1.2, tuning: tuning) < 255, "mid distance is strictly between min and max")
+do { // the numbers promised for the belt, with the default 0.5 m / 2.0 m range
+    let expected: [(Float, ClosedRange<Int>)] = [(1.6, 66...70), (1.2, 133...137), (0.9, 184...188), (0.7, 218...222)]
+    for (distance, range) in expected {
+        let u = Int(IntensityMapper.urgency(forDistance: distance, tuning: tuning))
+        check(range.contains(u), "\(distance) m -> urgency \(u), expected \(range)")
+    }
+}
+do { // a minUrgency of 0 must still never switch a real obstacle off
+    var t = tuning
+    t.minUrgency = 0
+    check(IntensityMapper.urgency(forDistance: t.farMeters - 0.01, tuning: t) >= 1, "minUrgency 0 is treated as 1")
+}
 
 // MARK: - Smoothing
 
@@ -234,11 +252,19 @@ print("Smoothing")
 do {
     var smoother = ZoneSmoother()
     var out = smoother.apply([0, 200, 0, 255], tuning: tuning)
-    check(out == [0, 200, 0, 255], "rising intensity applies immediately (got \(out))")
+    check(out == [0, 200, 0, 255], "rising urgency applies immediately (got \(out))")
+    out = smoother.apply([0, 100, 0, 255], tuning: tuning)
+    check(out[1] > 100 && out[1] < 200, "an obstacle moving away lowers urgency gradually (got \(out))")
+    for _ in 0..<12 { out = smoother.apply([0, 100, 0, 255], tuning: tuning) }
+    check(out[1] == 100 && out[3] == 255, "and settles on the new value (got \(out))")
     out = smoother.apply([0, 0, 0, 0], tuning: tuning)
-    check(out[1] > 0 && out[1] < 200, "a vanished obstacle fades rather than cutting out (got \(out))")
-    for _ in 0..<10 { out = smoother.apply([0, 0, 0, 0], tuning: tuning) }
-    check(out == [0, 0, 0, 0], "fade ends in clean silence (got \(out))")
+    check(out == [0, 0, 0, 0], "an obstacle that is gone switches the zone off at once, with no pulsing tail (got \(out))")
+    out = smoother.apply([0, 3, 0, 0], tuning: tuning)
+    check(out == [0, 3, 0, 0], "and a new one starts immediately after (got \(out))")
+    var solid = ZoneSmoother()
+    _ = solid.apply([255, 0, 0, 0], tuning: tuning)
+    let stepped = solid.apply([254, 0, 0, 0], tuning: tuning)[0]
+    check(stepped == 255 || stepped == 254, "solid to just-below-solid does not jump around (got \(stepped))")
 }
 
 // MARK: - Persistence filter
@@ -292,16 +318,23 @@ print("Wire packet")
 do { // an obstacle on the left at 1 m becomes the exact bytes the ESP32 firmware will parse
     let leftHalf = Surface(axis: 2, value: -1, contains: { $0.x < 0 })
     let zones = DepthProcessor.zoneDistances(render([leftHalf], pose: cameraPose(position: eye)), tuning: tuning)
-    let duties = zones.map { IntensityMapper.duty(forDistance: $0, tuning: tuning) }
-    let packet = [UInt8](BeltCommand(zoneValues: duties).packet(seq: 7))
+    let urgencies = zones.map { IntensityMapper.urgency(forDistance: $0, tuning: tuning) }
+    let packet = [UInt8](BeltCommand(zoneValues: urgencies).packet(seq: 7))
     check(packet.count == 6, "packet is 6 bytes (got \(packet.count))")
     check(packet[0] == 0xB7, "byte 0 is the magic 0xB7")
     check(packet[1] == 7, "byte 1 carries the sequence number")
-    check(packet[2] > tuning.minFeltDuty && packet[2] == packet[3], "left hip / left pocket buzz equally (got \(packet))")
-    check(packet[4] == 0 && packet[5] == 0, "right hip / right pocket are silent (got \(packet))")
+    check(packet[2] >= 1 && packet[2] <= 254 && packet[2] == packet[3], "left hip / left pocket pulse equally, neither off nor solid (got \(packet))")
+    check(packet[4] == 0 && packet[5] == 0, "right hip / right pocket are off (got \(packet))")
     // Wire order is leftHip, leftPocket, rightPocket, rightHip: a right-only command must land in the last bytes.
     let rightOnly = [UInt8](BeltCommand(zoneValues: [0, 0, 111, 222]).packet(seq: 255))
     check(rightOnly == [0xB7, 255, 0, 0, 111, 222], "zone order on the wire (got \(rightOnly))")
+}
+
+do { // an obstacle right in front of the phone becomes a solid buzz on the middle zones
+    let close = Surface(axis: 2, value: -0.4, contains: everywhere)
+    let zones = DepthProcessor.zoneDistances(render([close], pose: cameraPose(position: eye)), tuning: tuning)
+    let urgencies = zones.map { IntensityMapper.urgency(forDistance: $0, tuning: tuning) }
+    check(urgencies[1] == 255 && urgencies[2] == 255, "a wall 0.4 m away is solid on the middle zones (got \(urgencies))")
 }
 
 // MARK: - Result

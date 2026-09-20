@@ -17,7 +17,7 @@ import Foundation
 ///   overwriting newer belt state with stale data. Compare with wraparound in mind:
 ///   `(int8_t)(seq - lastAppliedSeq) > 0`, not a plain `>`. This is NOT a reliability/retry
 ///   mechanism — per the PRD, a dropped packet is simply superseded by the next update.
-/// - `z0...z3`: PWM duty cycle 0-255 per `BeltZone`, in wire order (leftHip, leftPocket,
+/// - `z0...z3`: urgency 0-255 per `BeltZone` (0 off, 1-254 pulse rate, 255 solid), in wire order (leftHip, leftPocket,
 ///   rightPocket, rightHip) — see `BeltCommand.orderedBytes`.
 enum BeltProtocol {
     static let magic: UInt8 = 0xB7
