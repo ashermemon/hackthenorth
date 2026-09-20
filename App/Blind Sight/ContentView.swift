@@ -5,7 +5,6 @@
 //  Created by Flora Yan on 2026-09-19.
 //
 
-import AVFoundation
 import SwiftUI
 
 struct ContentView: View {
@@ -20,8 +19,6 @@ struct ContentView: View {
 
     #if DEBUG
     @State private var lastRecordingURL: URL?
-    // Retained so it isn't deallocated mid-playback — AVAudioPlayer doesn't keep itself alive.
-    @State private var debugPlayer: AVAudioPlayer?
     @State private var debugStatus: String = ""
     #endif
 
@@ -78,15 +75,10 @@ struct ContentView: View {
                 Text("Saved: \(lastRecordingURL.lastPathComponent)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                // Sandboxed tmp/ isn't reachable from the Files app or Finder on a real
-                // device, so play it back in-app instead of hunting for the file.
-                Button("Play Recording") {
-                    do {
-                        debugPlayer = try AVAudioPlayer(contentsOf: lastRecordingURL)
-                        debugPlayer?.play()
-                    } catch {
-                        print("AudioRecorder debug: playback failed — \(error)")
-                    }
+            }
+            if voiceController.lastResponseAudio != nil {
+                Button("Repeat Response") {
+                    voiceController.replayLastResponse()
                 }
             }
 

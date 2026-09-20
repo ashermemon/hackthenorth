@@ -18,6 +18,9 @@ import Combine
 final class VoiceQueryController: ObservableObject {
     @Published private(set) var isProcessing = false
     @Published private(set) var lastError: String?
+    /// The most recent ElevenLabs TTS response, kept around so it can be replayed without
+    /// re-running the whole STT -> Gemini -> TTS chain.
+    @Published private(set) var lastResponseAudio: Data?
 
     private let frameProvider: FrameProviding
     private let stt: ElevenLabsSTT
@@ -73,6 +76,7 @@ final class VoiceQueryController: ObservableObject {
 
             let answer = try await gemini.answer(question: transcript, frameProvider: frameProvider)
             let audio = try await tts.synthesize(text: answer)
+            lastResponseAudio = audio
             try await player.play(audio)
         } catch {
             // Never log the raw API keys — only the error itself, which URLSession/Codable
@@ -80,6 +84,28 @@ final class VoiceQueryController: ObservableObject {
             print("VoiceQueryController: pipeline failed — \(error)")
             lastError = String(describing: error)
             playErrorTone()
+        }
+    }
+
+    /// Plays the last response again, without re-running STT/Gemini/TTS. Same overlap guard
+    /// as a fresh query, since it shares the same AudioPlayer/AVAudioSession.
+    func replayLastResponse() {
+        guard let audio = lastResponseAudio else { return }
+        guard !isProcessing else {
+            print("VoiceQueryController: query in flight, ignoring replay")
+            return
+        }
+
+        isProcessing = true
+        Task {
+            defer { isProcessing = false }
+            do {
+                try await player.play(audio)
+            } catch {
+                print("VoiceQueryController: replay failed — \(error)")
+                lastError = String(describing: error)
+                playErrorTone()
+            }
         }
     }
 
