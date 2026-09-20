@@ -10,9 +10,9 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var arSession = ARSessionManager.shared
+    @StateObject private var recorder = AudioRecorder()
 
     #if DEBUG
-    @StateObject private var debugRecorder = AudioRecorder()
     @State private var lastRecordingURL: URL?
     // Retained so it isn't deallocated mid-playback — AVAudioPlayer doesn't keep itself alive.
     @State private var debugPlayer: AVAudioPlayer?
@@ -27,22 +27,35 @@ struct ContentView: View {
                 .font(.title)
             Text(arSession.isRunning ? "Sensing active" : "Starting…")
                 .foregroundStyle(.secondary)
-            // TODO(voice): AVCaptureEventInteraction / .onCameraCaptureEvent replaces this
-            // debug button — it only fires while this view's ARSession (below) is running.
+
+            if #available(iOS 17.2, *) {
+                Text(recorder.isRecording ? "Listening…" : "Hold Volume Down to ask a question")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                // AVCaptureEventInteraction needs iOS 17.2+. Below that, this on-screen
+                // press-and-hold is the real trigger, not a debug stand-in — PRD's own
+                // stated mitigation for the hardware button being unavailable/unreliable.
+                Text(recorder.isRecording ? "Release to Send" : "Hold to Ask")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(recorder.isRecording ? Color.red : Color.accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in recorder.start() }
+                            .onEnded { _ in
+                                let url = recorder.stop()
+                                #if DEBUG
+                                lastRecordingURL = url
+                                #endif
+                            }
+                    )
+            }
 
             #if DEBUG
-            // TEMPORARY: stand-in for the volume-down push-to-talk trigger, just to verify
-            // AudioRecorder produces a valid file. Remove once AVCaptureEventInteraction is wired.
-            Button(debugRecorder.isRecording ? "Stop Recording" : "Start Recording") {
-                if debugRecorder.isRecording {
-                    lastRecordingURL = debugRecorder.stop()
-                } else {
-                    debugRecorder.start()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(debugRecorder.isRecording ? .red : .accentColor)
-
             if let lastRecordingURL {
                 Text("Saved: \(lastRecordingURL.lastPathComponent)")
                     .font(.caption)
@@ -61,6 +74,17 @@ struct ContentView: View {
             #endif
         }
         .padding()
+        .background(
+            CaptureEventTrigger(
+                onPress: { recorder.start() },
+                onRelease: {
+                    let url = recorder.stop()
+                    #if DEBUG
+                    lastRecordingURL = url
+                    #endif
+                }
+            )
+        )
         .environmentObject(arSession)
         .onAppear { arSession.start() }
         .onDisappear { arSession.stop() }
