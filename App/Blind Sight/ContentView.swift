@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var arSession = ARSessionManager.shared
+    @StateObject private var belt = BeltController.shared
     @StateObject private var recorder = AudioRecorder()
     @StateObject private var voiceController = VoiceQueryController()
     // EXPERIMENTAL — see VolumeButtonWatcher.swift for why AVCaptureEventInteraction wasn't
@@ -81,6 +82,8 @@ struct ContentView: View {
                 }
             }
             #endif
+
+            BeltDebugView(belt: belt)
         }
         .padding()
         .background(
@@ -99,6 +102,7 @@ struct ContentView: View {
         .environmentObject(arSession)
         .onAppear {
             arSession.start()
+            belt.start()
             if volumeWatcher == nil {
                 let watcher = VolumeButtonWatcher(recorder: recorder)
                 watcher.onStop = { url in
@@ -111,7 +115,10 @@ struct ContentView: View {
                 volumeWatcher = watcher
             }
         }
-        .onDisappear { arSession.stop() }
+        .onDisappear {
+            belt.stop()
+            arSession.stop()
+        }
     }
 }
 
