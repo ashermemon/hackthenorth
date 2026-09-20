@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fake iPhone: sends belt zone packets (see docs/PACKET_SPEC.md) to the ESP32.
 
+Run it from a Mac joined to the iPhone's Personal Hotspot, with the belt powered on.
+
 Examples:
   ./send_fake_zones.py static --zones 0 0 255 0
   ./send_fake_zones.py sweep                      # each zone ramps 0->255->0 in turn
@@ -69,7 +71,7 @@ MODES = {"static": gen_static, "sweep": gen_sweep, "walk": gen_walk, "garbage": 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=MODES)
-    ap.add_argument("--host", default="192.168.4.1")
+    ap.add_argument("--host", default="172.20.10.13", help="the belt (default: its fixed address on the iPhone hotspot)")
     ap.add_argument("--port", type=int, default=4210)
     ap.add_argument("--rate", type=float, default=5.0, help="packets per second")
     ap.add_argument("--period", type=float, default=6.0, help="seconds per sweep/walk cycle")

@@ -35,9 +35,10 @@ flag it to the other person first since both features depend on it.
 
 ## Belt wire protocol
 
-Phone → ESP32, UDP, `AppConfig.esp32Host:esp32Port` (default `192.168.4.1:4210`: the ESP32
-hosts its own WiFi network and the phone joins it; firmware is on `firmware/esp32-belt`).
-6 bytes, fixed size,
+Phone → ESP32, UDP, `AppConfig.esp32Host:esp32Port` (default `172.20.10.13:4210`). The ESP32
+joins the phone's **Personal Hotspot** as a client at that fixed address (an iPhone hotspot is
+always `172.20.10.0/28`, phone at `.1`), so the phone keeps cellular for the voice APIs. Firmware:
+`firmware/belt_arduino/` (Arduino-ESP32 core 3.x). 6 bytes, fixed size,
 no endianness concerns (every field is a single byte). This is the one interface Xcode's
 type checker can't verify for you, since the ESP32 firmware is a separate codebase/language —
 whoever implements the firmware decoder should match this exactly, not re-derive it:
@@ -78,7 +79,8 @@ On a real iPhone 15 Pro (iOS 18.4):
 - **Phone → ESP32 delivery.** Packets are sent (the debug screen's counter rises) but have not
   yet been seen by a listener or the real belt.
 - **Motors.** Nothing has been felt on real hardware. The belt's minimum felt duty (60,
-  `BeltTuning.minFeltDuty`) is a placeholder until the `bench_pwm` results are in.
+  `BeltTuning.minFeltDuty`) is a placeholder until the weakest felt buzz is measured on the real
+  belt (the debug screen's manual mode sends any value to any motor).
 
 ## Git workflow
 

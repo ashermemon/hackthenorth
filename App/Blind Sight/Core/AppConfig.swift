@@ -10,8 +10,10 @@ import Foundation
 enum AppConfig {
     // MARK: - ESP32 / belt link (PRD "Data Flow & Communication Protocol")
 
-    /// TODO(belt): set to the ESP32's address on the phone↔ESP32 local WiFi link.
-    static let esp32Host = "192.168.4.1"
+    /// The ESP32 joins the phone's Personal Hotspot at this fixed address (BELT_STATIC_IP_OCTETS in
+    /// firmware/belt_arduino/belt_config.h; an iPhone hotspot is always 172.20.10.0/28). The debug
+    /// screen can override it, e.g. to point at a Mac running tools/belt_packet_listener.py.
+    static let esp32Host = "172.20.10.13"
     static let esp32Port: UInt16 = 4210
 
     /// PRD: "a few times per second — fast enough to feel responsive, not so fast it floods the WiFi link."

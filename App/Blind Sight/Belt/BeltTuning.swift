@@ -15,8 +15,8 @@ nonisolated struct BeltTuning {
     var nearMeters: Float = 0.5
     /// At or beyond this, the zone is silent.
     var farMeters: Float = 2.0
-    /// Lowest PWM duty the motors actually feel. PLACEHOLDER: replace with the dead-zone
-    /// number from Mohammed's bench test (firmware/bench_pwm) once it's measured.
+    /// Lowest PWM duty the motors actually feel. PLACEHOLDER: replace with the dead-zone number
+    /// measured on the real belt (debug screen -> manual mode: raise one motor until it buzzes).
     var minFeltDuty: UInt8 = 60
     /// 1 = linear ramp between far and near; >1 keeps it gentle until the obstacle is close.
     var intensityCurve: Float = 1.0
