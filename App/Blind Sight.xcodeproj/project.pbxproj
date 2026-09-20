@@ -243,6 +243,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "BlindSight uses the camera and LiDAR to sense obstacles and describe your surroundings.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BlindSight uses the microphone to hear your spoken questions.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BlindSight sends obstacle-feedback commands to the belt over the local WiFi link.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -275,6 +278,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "BlindSight uses the camera and LiDAR to sense obstacles and describe your surroundings.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BlindSight uses the microphone to hear your spoken questions.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BlindSight sends obstacle-feedback commands to the belt over the local WiFi link.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

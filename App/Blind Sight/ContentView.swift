@@ -8,14 +8,24 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var arSession = ARSessionManager.shared
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
+        VStack(spacing: 12) {
+            Image(systemName: "eye")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
-            Text("Hello, world!")
+            Text("BlindSight")
+                .font(.title)
+            Text(arSession.isRunning ? "Sensing active" : "Starting…")
+                .foregroundStyle(.secondary)
+            // TODO(voice): AVCaptureEventInteraction / .onCameraCaptureEvent attaches here —
+            // it only fires while this view's ARSession (below) is actively running.
         }
         .padding()
+        .environmentObject(arSession)
+        .onAppear { arSession.start() }
+        .onDisappear { arSession.stop() }
     }
 }
 
