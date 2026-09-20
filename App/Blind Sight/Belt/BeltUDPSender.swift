@@ -15,14 +15,30 @@ final class BeltUDPSender: ObservableObject {
     @Published private(set) var status = "not started"
     @Published private(set) var packetsSent = 0
     @Published private(set) var host: String
+    /// Whether the UDP socket is currently open and able to send (drives the "Belt linked" UI).
+    @Published private(set) var isReady = false
+    /// Packets sent in roughly the last second — a rate, not the cumulative `packetsSent` count
+    /// (the "PACKETS 8 / s" demo-screen chip).
+    @Published private(set) var packetsPerSecond: Double = 0
 
     private var connection: NWConnection?
-    private var isReady = false
     private let sequence = BeltSequenceCounter()
     private let queue = DispatchQueue(label: "belt.udp", qos: .userInitiated)
+    private var rateTimer: Timer?
+    private var packetsAtLastTick = 0
 
     init(host: String = AppConfig.esp32Host) {
         self.host = host
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tickRate() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        rateTimer = timer
+    }
+
+    private func tickRate() {
+        packetsPerSecond = Double(packetsSent - packetsAtLastTick)
+        packetsAtLastTick = packetsSent
     }
 
     /// (Re)opens the socket, optionally pointing at a different host (e.g. a Mac running
