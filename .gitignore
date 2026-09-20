@@ -14,3 +14,11 @@ xcuserdata/
 
 # Secrets — copy Core/Secrets.example.swift to Core/Secrets.swift and fill in locally
 App/Blind Sight/Core/Secrets.swift
+
+# Firmware (ESP-IDF build output, per-machine config, downloaded components)
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Python
+__pycache__/
