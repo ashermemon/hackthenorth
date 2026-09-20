@@ -11,6 +11,11 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var arSession = ARSessionManager.shared
     @StateObject private var recorder = AudioRecorder()
+    // EXPERIMENTAL — see VolumeButtonWatcher.swift for why AVCaptureEventInteraction wasn't
+    // enough and what this trades away (toggle not hold, fragile HUD-reset trick). Not
+    // ObservableObject — it just drives the same `recorder` everything else already observes,
+    // so it's created once (lazily, in onAppear) and held here without needing @StateObject.
+    @State private var volumeWatcher: VolumeButtonWatcher?
 
     #if DEBUG
     @State private var lastRecordingURL: URL?
@@ -26,6 +31,9 @@ struct ContentView: View {
             Text("BlindSight")
                 .font(.title)
             Text(arSession.isRunning ? "Sensing active" : "Starting…")
+                .foregroundStyle(.secondary)
+            Text("Volume Down also toggles recording (experimental)")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
 
             // Primary trigger: on-screen press-and-hold, not gated on iOS version. Confirmed
@@ -83,7 +91,18 @@ struct ContentView: View {
             )
         )
         .environmentObject(arSession)
-        .onAppear { arSession.start() }
+        .onAppear {
+            arSession.start()
+            if volumeWatcher == nil {
+                let watcher = VolumeButtonWatcher(recorder: recorder)
+                watcher.onStop = { url in
+                    #if DEBUG
+                    lastRecordingURL = url
+                    #endif
+                }
+                volumeWatcher = watcher
+            }
+        }
         .onDisappear { arSession.stop() }
     }
 }
