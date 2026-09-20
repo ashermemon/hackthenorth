@@ -29,13 +29,18 @@ final class ARSessionManager: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     func start() {
-        guard ARWorldTrackingConfiguration.isSupported else { return }
+        guard ARWorldTrackingConfiguration.isSupported else {
+            print("ARSessionManager: ARWorldTrackingConfiguration not supported on this device")
+            return
+        }
         let config = ARWorldTrackingConfiguration()
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
             config.frameSemantics.insert(.sceneDepth)
         }
         session.run(config)
-        isRunning = true
+        // isRunning flips to true on the first didUpdate frame, not here — run() is
+        // fire-and-forget and doesn't confirm the camera is actually delivering frames
+        // (e.g. camera permission denied fails silently from this call site).
     }
 
     func stop() {
@@ -55,10 +60,12 @@ final class ARSessionManager: NSObject, ObservableObject, ARSessionDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.latestFrame = frame
             self?.trackingState = frame.camera.trackingState
+            self?.isRunning = true
         }
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
+        print("ARSessionManager: session failed — \(error)")
         DispatchQueue.main.async { [weak self] in
             self?.isRunning = false
         }
