@@ -7,6 +7,7 @@
 //  path never runs — without waiting on real device time.
 //
 
+import ARKit
 import CoreImage
 import CoreVideo
 import UIKit
