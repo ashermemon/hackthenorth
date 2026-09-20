@@ -12,7 +12,8 @@ import UIKit
 /// Owns the depth -> belt zone/intensity loop (PRD "Processing" -> "Depth -> belt zone/intensity"):
 /// a few times per second (`AppConfig.beltUpdateHz`) it copies the latest LiDAR frame off
 /// `ARSessionManager.shared`, works out the nearest obstacle per zone on a background queue,
-/// turns that into PWM duties, and sends them to the ESP32 over UDP.
+/// turns that into per-zone urgency values (how fast each motor pulses), and sends them to the
+/// ESP32 over UDP.
 ///
 /// It never waits on the voice pipeline (they share only the ARSession), and if a tick's depth
 /// work is still running when the next tick fires, that tick is skipped instead of queued, so a
@@ -25,12 +26,12 @@ final class BeltController: ObservableObject {
     /// Nearest obstacle per zone (meters) after the persistence filter, nil = clear. This is what
     /// drives the belt, and what the debug screen shows.
     @Published private(set) var distances = [Float?](repeating: nil, count: DepthProcessor.zoneCount)
-    /// What was last sent to the belt, in wire order.
-    @Published private(set) var duties = [UInt8](repeating: 0, count: DepthProcessor.zoneCount)
+    /// The urgency values last sent to the belt, in wire order (0 off, 1-254 pulse rate, 255 solid).
+    @Published private(set) var urgencies = [UInt8](repeating: 0, count: DepthProcessor.zoneCount)
     @Published private(set) var depthStatus = "waiting for depth"
     @Published private(set) var processingMillis = 0.0
-    /// When non-nil, these duties are sent as-is and depth is ignored (link/belt testing).
-    @Published var manualDuties: [UInt8]? {
+    /// When non-nil, these urgency values are sent as-is and depth is ignored (link/belt testing).
+    @Published var manualUrgencies: [UInt8]? {
         didSet {
             smoother.reset()
             distanceFilter.reset()
@@ -94,7 +95,7 @@ final class BeltController: ObservableObject {
     // MARK: - The loop
 
     private func tick() {
-        if let manual = manualDuties {
+        if let manual = manualUrgencies {
             emit(manual)
             return
         }
@@ -129,24 +130,25 @@ final class BeltController: ObservableObject {
 
     private func finish(_ zones: [Float?], tuning: BeltTuning, millis: Double, snapshot: DepthSnapshot) {
         isProcessing = false
-        guard manualDuties == nil else { return } // switched to manual mid-flight
+        guard manualUrgencies == nil else { return } // switched to manual mid-flight
         let filtered = distanceFilter.apply(zones, window: tuning.distanceWindow)
         distances = filtered
         processingMillis = millis
         depthStatus = "depth \(snapshot.width)x\(snapshot.height), \(String(format: "%.1f", millis)) ms"
-        let targets = filtered.map { IntensityMapper.duty(forDistance: $0, tuning: tuning) }
+        let targets = filtered.map { IntensityMapper.urgency(forDistance: $0, tuning: tuning) }
         emit(smoother.apply(targets, tuning: tuning))
     }
 
-    private func emit(_ zoneDuties: [UInt8]) {
-        duties = zoneDuties
-        sender.send(BeltCommand(zoneValues: zoneDuties))
+    private func emit(_ zoneUrgencies: [UInt8]) {
+        urgencies = zoneUrgencies
+        sender.send(BeltCommand(zoneValues: zoneUrgencies))
     }
 
     // MARK: - Test pattern
 
-    /// Ramps each zone 0 -> 255 in turn, ignoring depth: a quick "does every motor answer, in the
-    /// right order" check for the belt, and a way to test the link with no obstacle handy.
+    /// Ramps each zone's urgency 0 -> 255 in turn, ignoring depth: each motor starts pulsing slowly,
+    /// speeds up, and ends solid. A quick "does every motor answer, in the right order" check for the
+    /// belt, and a way to test the link with no obstacle handy.
     func runSweepTest() {
         sweepTask?.cancel()
         sweepTask = Task { @MainActor in
@@ -155,11 +157,11 @@ final class BeltController: ObservableObject {
                     if Task.isCancelled { return }
                     var values = [UInt8](repeating: 0, count: DepthProcessor.zoneCount)
                     values[zone] = UInt8(step * 255 / 20)
-                    manualDuties = values
+                    manualUrgencies = values
                     try? await Task.sleep(for: .milliseconds(100))
                 }
             }
-            manualDuties = nil
+            manualUrgencies = nil
         }
     }
 }

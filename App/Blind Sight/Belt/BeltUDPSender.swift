@@ -34,8 +34,8 @@ final class BeltUDPSender: ObservableObject {
         guard let port = NWEndpoint.Port(rawValue: AppConfig.esp32Port) else { return }
 
         let parameters = NWParameters.udp
-        // The ESP32 hosts its own WiFi network; this link must never go out over cellular. (Not
-        // "require wifi": a Mac on the phone's Personal Hotspot is reached over a bridge interface.)
+        // The ESP32 joins the phone's Personal Hotspot; this link must never go out over cellular.
+        // (Not "require wifi": clients of the phone's own hotspot are reached over a bridge interface.)
         parameters.prohibitedInterfaceTypes = [.cellular]
         let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: parameters)
         connection.stateUpdateHandler = { [weak self, weak connection] state in
@@ -57,7 +57,7 @@ final class BeltUDPSender: ObservableObject {
     }
 
     /// Sends one belt update. Dropped silently while the link isn't ready, so packets built
-    /// before the phone joined the ESP32's WiFi can't arrive late as stale data.
+    /// before the belt was reachable can't arrive late as stale data.
     func send(_ command: BeltCommand) {
         guard isReady, let connection else { return }
         let data = command.packet(seq: sequence.next())
@@ -75,7 +75,7 @@ final class BeltUDPSender: ObservableObject {
             status = "ready: \(host):\(AppConfig.esp32Port)"
         case .waiting(let error):
             isReady = false
-            status = "waiting (is the phone on the belt's WiFi?): \(error)"
+            status = "waiting for a route to the belt (is Personal Hotspot on and the belt joined?): \(error)"
         case .failed(let error):
             isReady = false
             status = "failed: \(error) (retrying)"

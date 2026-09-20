@@ -9,24 +9,31 @@
 import Foundation
 
 nonisolated struct BeltTuning {
-    // MARK: Distance -> intensity (PRD: min-distance threshold = max intensity, far threshold = zero)
+    // MARK: Distance -> urgency (PRD: min-distance threshold = max, far threshold = silent)
+    //
+    // What goes to the belt per zone is URGENCY, not motor strength: 0 = off, 255 = solid buzz,
+    // and 1...254 = pulses that come faster the closer the obstacle (the ESP32 turns that into a
+    // pulse rate; see firmware/belt_arduino/belt_pulse.h). Every pulse has the same strength, so
+    // there is no weakest-felt-buzz to tune.
 
-    /// At or closer than this, the zone buzzes at full strength.
+    /// At or closer than this, the zone buzzes solid (255).
     var nearMeters: Float = 0.5
-    /// At or beyond this, the zone is silent.
+    /// At or beyond this, the zone is silent (0).
     var farMeters: Float = 2.0
-    /// Lowest PWM duty the motors actually feel. PLACEHOLDER: replace with the dead-zone
-    /// number from Mohammed's bench test (firmware/bench_pwm) once it's measured.
-    var minFeltDuty: UInt8 = 60
-    /// 1 = linear ramp between far and near; >1 keeps it gentle until the obstacle is close.
+    /// Urgency at the far edge, where pulses are slowest. 1 uses the whole rate range.
+    var minUrgency: UInt8 = 1
+    /// 1 = urgency rises linearly with closeness (pulse rate then rises geometrically, which is
+    /// what feels like even steps); >1 keeps it gentle until the obstacle is close.
     var intensityCurve: Float = 1.0
     /// A zone's distance is the median of its last N readings (one per belt tick; a clear reading
     /// counts as infinitely far), so a reading has to hold up over most of a short window before it
     /// buzzes, and one noisy frame can neither start nor cut a buzz. 1 turns this off. Costs about
     /// one tick (200 ms at 5 Hz) of extra reaction time when an obstacle first appears.
     var distanceWindow: Int = 3
-    /// How fast a buzz fades once the obstacle is gone (0...1 per tick; 1 = instant). Rising
-    /// intensity is not smoothed: once a reading has passed `distanceWindow`, the belt shows it as is.
+    /// How fast urgency comes DOWN while an obstacle is still there but moving away (0...1 per
+    /// tick; 1 = instant), which keeps the pulse rate from jittering. Rising urgency is not
+    /// smoothed, and an obstacle that is gone switches the zone off at once: `distanceWindow`
+    /// already stops one bad frame from doing that.
     var releaseFactor: Float = 0.5
 
     // MARK: Depth filtering

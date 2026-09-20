@@ -35,9 +35,10 @@ flag it to the other person first since both features depend on it.
 
 ## Belt wire protocol
 
-Phone → ESP32, UDP, `AppConfig.esp32Host:esp32Port` (default `192.168.4.1:4210`: the ESP32
-hosts its own WiFi network and the phone joins it; firmware is on `firmware/esp32-belt`).
-6 bytes, fixed size,
+Phone → ESP32, UDP, `AppConfig.esp32Host:esp32Port` (default `172.20.10.13:4210`). The ESP32
+joins the phone's **Personal Hotspot** as a client at that fixed address (an iPhone hotspot is
+always `172.20.10.0/28`, phone at `.1`), so the phone keeps cellular for the voice APIs. Firmware:
+`firmware/belt_arduino/` (Arduino-ESP32 core 3.x). 6 bytes, fixed size,
 no endianness concerns (every field is a single byte). This is the one interface Xcode's
 type checker can't verify for you, since the ESP32 firmware is a separate codebase/language —
 whoever implements the firmware decoder should match this exactly, not re-derive it:
@@ -46,7 +47,7 @@ whoever implements the firmware decoder should match this exactly, not re-derive
 |---|---|---|
 | 0 | magic | Always `0xB7`. Firmware should ignore any packet where this doesn't match. |
 | 1 | seq | Wraps 0–255, increments per packet. Only apply a packet if it's newer than the last applied one: `(int8_t)(seq - lastAppliedSeq) > 0` — plain `>` breaks on wraparound. This guards against *reordering*, not drops; per the PRD a dropped packet is just superseded by the next update, never retried. **Exception:** if nothing has been applied for the hold window (500 ms), accept the next valid packet whatever its `seq` — the belt is already silent, and restarting the phone app resets `seq` to 0, which would otherwise be ignored for up to 128 updates. |
-| 2–5 | z0..z3 | PWM duty cycle 0–255, in order leftHip, leftPocket, rightPocket, rightHip. |
+| 2–5 | z0..z3 | Urgency 0–255 per zone, in order leftHip, leftPocket, rightPocket, rightHip: 0 off, 1–254 pulses that come faster the closer the obstacle (1 → 6 per second), 255 solid. The ESP32 makes the pulses. |
 
 Firmware should also hold its last commanded state briefly rather than zeroing all motors on
 a single missed packet (PRD risk mitigation) — that's a timeout/watchdog on the decode side,
@@ -77,8 +78,9 @@ On a real iPhone 15 Pro (iOS 18.4):
 
 - **Phone → ESP32 delivery.** Packets are sent (the debug screen's counter rises) but have not
   yet been seen by a listener or the real belt.
-- **Motors.** Nothing has been felt on real hardware. The belt's minimum felt duty (60,
-  `BeltTuning.minFeltDuty`) is a placeholder until the `bench_pwm` results are in.
+- **Motors.** Nothing has been felt on real hardware in the pulse-rate design. The feel constants
+  (`BELT_PULSE_DUTY`, pulse length, 1–6 per second, in `firmware/belt_arduino/belt_config.h`) are
+  first guesses to tune on the real belt.
 
 ## Git workflow
 
