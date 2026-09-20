@@ -19,7 +19,6 @@ struct ContentView: View {
 
     #if DEBUG
     @State private var lastRecordingURL: URL?
-    @State private var debugStatus: String = ""
     #endif
 
     var body: some View {
@@ -31,7 +30,7 @@ struct ContentView: View {
                 .font(.title)
             Text(arSession.isRunning ? "Sensing active" : "Starting…")
                 .foregroundStyle(.secondary)
-            Text("Volume Down also toggles recording (experimental)")
+            Text("Volume Down toggles recording, Volume Up repeats the last response (experimental)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             if voiceController.isProcessing {
@@ -81,60 +80,6 @@ struct ContentView: View {
                     voiceController.replayLastResponse()
                 }
             }
-
-            // Per-stage isolation tests, per the task's "test each file before wiring the
-            // full chain" instruction — each hits only one API, independent of the others.
-            Divider()
-            Text("Isolation tests").font(.caption).foregroundStyle(.secondary)
-
-            Button("Test STT (last recording)") {
-                guard let lastRecordingURL else {
-                    debugStatus = "STT: no recording yet — use Hold to Ask first"
-                    return
-                }
-                Task {
-                    do {
-                        let transcript = try await ElevenLabsSTT().transcribe(fileURL: lastRecordingURL)
-                        debugStatus = "STT result: \(transcript ?? "(empty)")"
-                    } catch {
-                        debugStatus = "STT failed: \(error)"
-                    }
-                }
-            }
-
-            Button("Test Gemini (mock frame)") {
-                Task {
-                    do {
-                        let answer = try await GeminiClient().answer(
-                            question: "What am I looking at?",
-                            frameProvider: MockFrameProvider()
-                        )
-                        debugStatus = "Gemini result: \(answer)"
-                    } catch {
-                        debugStatus = "Gemini failed: \(error)"
-                    }
-                }
-            }
-
-            Button("Test TTS (hardcoded string)") {
-                Task {
-                    do {
-                        let audio = try await ElevenLabsTTS().synthesize(text: "This is a test of the text to speech pipeline.")
-                        debugStatus = "TTS: got \(audio.count) bytes, playing…"
-                        try await AudioPlayer().play(audio)
-                        debugStatus = "TTS: playback finished"
-                    } catch {
-                        debugStatus = "TTS failed: \(error)"
-                    }
-                }
-            }
-
-            if !debugStatus.isEmpty {
-                Text(debugStatus)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
             #endif
         }
         .padding()
@@ -147,7 +92,8 @@ struct ContentView: View {
                     lastRecordingURL = url
                     #endif
                     voiceController.handleRecordingFinished(url: url)
-                }
+                },
+                onVolumeUp: { voiceController.replayLastResponse() }
             )
         )
         .environmentObject(arSession)
@@ -161,6 +107,7 @@ struct ContentView: View {
                     #endif
                     voiceController.handleRecordingFinished(url: url)
                 }
+                watcher.onVolumeUp = { voiceController.replayLastResponse() }
                 volumeWatcher = watcher
             }
         }

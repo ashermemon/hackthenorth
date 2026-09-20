@@ -27,6 +27,9 @@ import UIKit
 struct CaptureEventTrigger: UIViewRepresentable {
     let onPress: () -> Void
     let onRelease: () -> Void
+    /// Volume Up — a discrete one-shot action (replay the last response), so this fires once
+    /// on release rather than needing press/hold phases like the primary action does.
+    let onVolumeUp: () -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
@@ -45,8 +48,10 @@ struct CaptureEventTrigger: UIViewRepresentable {
                         break
                     }
                 },
-                secondary: { _ in
-                    // Volume Up: no secondary action yet (PRD leaves this open for later).
+                secondary: { event in
+                    if event.phase == .ended {
+                        onVolumeUp()
+                    }
                 }
             )
             // view.addInteraction retains it via its own `interactions` array — no extra storage needed.

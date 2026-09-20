@@ -7,8 +7,10 @@
 //  AVCaptureEventInteraction (CaptureEventTrigger.swift) is the correct, Apple-sanctioned way
 //  to intercept hardware buttons, but confirmed on-device (iOS 18.7) that it doesn't fire
 //  reliably with ARKit's session. This is the pre-iOS-17.2 community workaround: observe
-//  AVAudioSession's outputVolume via KVO, treat a decrease as a "press," and snap the system
-//  volume HUD back to baseline so it doesn't visibly drift and future presses keep registering.
+//  AVAudioSession's outputVolume via KVO, treat a decrease as a Volume Down "press" (toggles
+//  recording) and an increase as a Volume Up "press" (replays the last response), and snap
+//  the system volume HUD back to baseline so it doesn't visibly drift and future presses keep
+//  registering.
 //
 //  Known limitations — read before depending on this:
 //  - Toggle only, not a hold gesture. KVO gives "volume changed," not press/release phases,
@@ -35,6 +37,10 @@ final class VolumeButtonWatcher: NSObject {
     /// Fired after a detected press stops a recording, so callers can track the file the
     /// same way they do for the other trigger sources (on-screen button, CaptureEventTrigger).
     var onStop: ((URL?) -> Void)?
+    /// Fired when a volume-up press is detected (mirrors CaptureEventTrigger's secondary
+    /// action) — intended for "replay the last response," a discrete one-shot action, so this
+    /// fires once per detected press rather than needing press/release phases.
+    var onVolumeUp: (() -> Void)?
 
     private var kvoContext = 0
     private let session = AVAudioSession.sharedInstance()
@@ -96,6 +102,10 @@ final class VolumeButtonWatcher: NSObject {
         if newVolume < baselineVolume {
             DispatchQueue.main.async { [weak self] in
                 self?.togglePress()
+            }
+        } else if newVolume > baselineVolume {
+            DispatchQueue.main.async { [weak self] in
+                self?.onVolumeUp?()
             }
         }
         resetVolumeHUD()
