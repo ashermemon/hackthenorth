@@ -12,6 +12,7 @@
 import AudioToolbox
 import Foundation
 import UIKit
+import Combine
 
 @MainActor
 final class VoiceQueryController: ObservableObject {
