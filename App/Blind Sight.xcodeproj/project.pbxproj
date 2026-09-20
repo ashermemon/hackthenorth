@@ -243,6 +243,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 69UV2L2VPW;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = Secrets.example.swift;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BlindSight uses the camera and LiDAR to sense obstacles and describe your surroundings.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BlindSight sends obstacle-feedback commands to the belt over the local WiFi link.";
@@ -279,6 +280,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 69UV2L2VPW;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = Secrets.example.swift;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BlindSight uses the camera and LiDAR to sense obstacles and describe your surroundings.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BlindSight sends obstacle-feedback commands to the belt over the local WiFi link.";
