@@ -20,6 +20,7 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// No-op if already recording. Requests mic permission if it hasn't been decided yet.
     func start() {
         guard !isRecording else { return }
+        OwnAudioActivity.mark() // the volume watcher must not read our session change as a button press
 
         let session = AVAudioSession.sharedInstance()
         do {
@@ -59,6 +60,7 @@ final class AudioRecorder: NSObject, ObservableObject {
     func stop() -> URL? {
         guard isRecording, let recorder else { return nil }
         recorder.stop()
+        OwnAudioActivity.mark()
         isRecording = false
         let url = recorder.url
         self.recorder = nil

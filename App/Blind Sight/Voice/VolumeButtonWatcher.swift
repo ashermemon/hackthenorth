@@ -44,7 +44,7 @@ final class VolumeButtonWatcher: NSObject {
 
     private var kvoContext = 0
     private let session = AVAudioSession.sharedInstance()
-    private var baselineVolume: Float = 0.5
+    private var classifier = VolumeEventClassifier(baseline: 0.5)
     private let recorder: AudioRecorder
 
     private lazy var hiddenVolumeView: MPVolumeView = {
@@ -64,7 +64,7 @@ final class VolumeButtonWatcher: NSObject {
         do {
             try session.setCategory(.ambient, options: [])
             try session.setActive(true)
-            baselineVolume = session.outputVolume
+            classifier.baseline = session.outputVolume
             session.addObserver(self, forKeyPath: "outputVolume", options: [.new], context: &kvoContext)
             attachHiddenVolumeView()
         } catch {
@@ -98,15 +98,23 @@ final class VolumeButtonWatcher: NSObject {
             return
         }
         guard let newVolume = change?[.newKey] as? Float else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.handleVolumeChange(newVolume)
+        }
+    }
 
-        if newVolume < baselineVolume {
-            DispatchQueue.main.async { [weak self] in
-                self?.togglePress()
-            }
-        } else if newVolume > baselineVolume {
-            DispatchQueue.main.async { [weak self] in
-                self?.onVolumeUp?()
-            }
+    /// Runs on main, so the classifier and the app's own-activity window are only ever touched
+    /// from one thread.
+    private func handleVolumeChange(_ newVolume: Float) {
+        switch classifier.classify(newVolume: newVolume, now: Date(), quietUntil: OwnAudioActivity.quietUntil) {
+        case .ignored:
+            return // the app's own audio activity moved the volume, not a button
+        case .down:
+            togglePress()
+        case .up:
+            onVolumeUp?()
+        case .unchanged:
+            break
         }
         resetVolumeHUD()
     }
@@ -122,7 +130,7 @@ final class VolumeButtonWatcher: NSObject {
 
     private func resetVolumeHUD() {
         attachHiddenVolumeView()
-        let target = baselineVolume
+        let target = classifier.baseline
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let slider = self?.hiddenVolumeView.subviews.first(where: { $0 is UISlider }) as? UISlider else { return }
             slider.setValue(target, animated: false)

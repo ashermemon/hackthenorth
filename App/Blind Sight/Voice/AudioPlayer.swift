@@ -20,6 +20,8 @@ final class AudioPlayer: NSObject, AVAudioPlayerDelegate {
     /// Switches the session to .playback rather than reusing .playAndRecord's earpiece-prone
     /// routing — without this, answers are nearly inaudible with no headphones plugged in.
     func play(_ data: Data) async throws {
+        OwnAudioActivity.mark()
+        defer { OwnAudioActivity.mark() } // playback ending changes the session too
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, options: [])
         try session.setActive(true)

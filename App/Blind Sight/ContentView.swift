@@ -96,7 +96,7 @@ struct ContentView: View {
                     #endif
                     voiceController.handleRecordingFinished(url: url)
                 },
-                onVolumeUp: { voiceController.replayLastResponse() }
+                onVolumeUp: { if !recorder.isRecording { voiceController.replayLastResponse() } }
             )
         )
         .environmentObject(arSession)
@@ -111,7 +111,7 @@ struct ContentView: View {
                     #endif
                     voiceController.handleRecordingFinished(url: url)
                 }
-                watcher.onVolumeUp = { voiceController.replayLastResponse() }
+                watcher.onVolumeUp = { [recorder] in if !recorder.isRecording { voiceController.replayLastResponse() } }
                 volumeWatcher = watcher
             }
         }
