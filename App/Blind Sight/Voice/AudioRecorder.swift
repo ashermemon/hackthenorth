@@ -13,6 +13,9 @@ final class AudioRecorder: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
 
     private var recorder: AVAudioRecorder?
+    /// Haptic + short tone the moment recording starts, so a wearer who can't see the screen
+    /// knows the mic is live (the chime on release only confirms the question was sent).
+    private let startCue = RecordingCue()
 
     /// No-op if already recording. Requests mic permission if it hasn't been decided yet.
     func start() {
@@ -21,6 +24,9 @@ final class AudioRecorder: NSObject, ObservableObject {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+            // iOS suppresses haptics and system sounds while the mic is recording unless this is
+            // set, which would silently disable the start cue below.
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
             try session.setActive(true)
         } catch {
             print("AudioRecorder: failed to activate audio session — \(error)")
@@ -77,6 +83,7 @@ final class AudioRecorder: NSObject, ObservableObject {
             newRecorder.record()
             recorder = newRecorder
             isRecording = true
+            startCue.play()
         } catch {
             print("AudioRecorder: failed to start recording — \(error)")
         }

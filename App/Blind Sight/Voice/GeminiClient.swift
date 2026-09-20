@@ -42,18 +42,19 @@ struct GeminiClient {
         self.session = session
     }
 
-    /// Grabs the current frame from `frameProvider`, compresses it, and asks Gemini the
-    /// question with `AppConfig.geminiSystemPrompt` as system instruction — sent verbatim,
-    /// per the PRD's note that the uncertainty-handling clause is load-bearing.
-    func answer(question: String, frameProvider: FrameProviding) async throws -> String {
-        guard let sourceJPEG = frameProvider.latestJPEG else {
-            throw GeminiError.noFrameAvailable
-        }
+    /// Compresses `frameJPEG` and asks Gemini the question with `AppConfig.geminiSystemPrompt` as
+    /// system instruction — sent verbatim, per the PRD's note that the uncertainty-handling
+    /// clause is load-bearing. The caller captures the frame when the button is released and
+    /// passes it in, so the answer is about what the camera saw then, not whatever it sees by
+    /// the time speech-to-text has finished.
+    func answer(question: String, frameJPEG sourceJPEG: Data) async throws -> String {
         guard let compressedJPEG = Self.recompress(jpegData: sourceJPEG, maxLongEdge: maxLongEdge, quality: jpegQuality) else {
             throw GeminiError.imageEncodingFailed
         }
 
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+        // The key goes in a header, never the URL: a URL's query string is copied into URLError text
+        // (NSErrorFailingURLStringKey), which this app prints and shows on screen when a request fails.
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent")!
 
         let body = RequestBody(
             systemInstruction: .init(parts: [.init(text: systemPrompt)]),
@@ -68,6 +69,7 @@ struct GeminiClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await session.data(for: request)

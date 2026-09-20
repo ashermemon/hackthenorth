@@ -54,18 +54,28 @@ final class VoiceQueryController: ObservableObject {
             return
         }
 
+        // Capture the camera frame right now, at button release, as the PRD specifies. Waiting
+        // until after speech-to-text (a second or two later) would answer "what's in front of
+        // me?" about wherever the wearer had walked or turned to by then. Doing it here also
+        // covers every trigger, since they all end up in this method.
+        guard let frameJPEG = frameProvider.latestJPEG else {
+            report(GeminiClient.GeminiError.noFrameAvailable, context: "no camera frame at release")
+            playErrorTone()
+            return
+        }
+
         isProcessing = true
         lastError = nil
         playAcknowledgment()
 
         Task {
-            await runPipeline(audioURL: url)
+            await runPipeline(audioURL: url, frameJPEG: frameJPEG)
         }
     }
 
     /// Runs entirely off the caller's thread via `Task` — never called from, or blocking,
     /// the ARSession delegate callback or the belt's UDP loop.
-    private func runPipeline(audioURL: URL) async {
+    private func runPipeline(audioURL: URL, frameJPEG: Data) async {
         defer { isProcessing = false }
 
         do {
@@ -74,15 +84,12 @@ final class VoiceQueryController: ObservableObject {
                 return
             }
 
-            let answer = try await gemini.answer(question: transcript, frameProvider: frameProvider)
+            let answer = try await gemini.answer(question: transcript, frameJPEG: frameJPEG)
             let audio = try await tts.synthesize(text: answer)
             lastResponseAudio = audio
             try await player.play(audio)
         } catch {
-            // Never log the raw API keys — only the error itself, which URLSession/Codable
-            // errors don't embed.
-            print("VoiceQueryController: pipeline failed — \(error)")
-            lastError = String(describing: error)
+            report(error, context: "pipeline failed")
             playErrorTone()
         }
     }
@@ -102,11 +109,18 @@ final class VoiceQueryController: ObservableObject {
             do {
                 try await player.play(audio)
             } catch {
-                print("VoiceQueryController: replay failed — \(error)")
-                lastError = String(describing: error)
+                report(error, context: "replay failed")
                 playErrorTone()
             }
         }
+    }
+
+    /// Logs and shows an error with any API key removed. `lastError` is displayed on screen, and
+    /// network errors can carry request details, so raw errors must never go straight to either.
+    private func report(_ error: Error, context: String) {
+        let message = ErrorText.safe(error, secrets: [Secrets.elevenLabsAPIKey, Secrets.geminiAPIKey])
+        print("VoiceQueryController: \(context) — \(message)")
+        lastError = message
     }
 
     // MARK: - Local feedback
