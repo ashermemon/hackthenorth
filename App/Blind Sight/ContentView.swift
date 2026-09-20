@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var arSession = ARSessionManager.shared
+    @StateObject private var belt = BeltController.shared
 
     var body: some View {
         VStack(spacing: 12) {
@@ -21,11 +22,18 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             // TODO(voice): AVCaptureEventInteraction / .onCameraCaptureEvent attaches here —
             // it only fires while this view's ARSession (below) is actively running.
+            BeltDebugView(belt: belt)
         }
         .padding()
         .environmentObject(arSession)
-        .onAppear { arSession.start() }
-        .onDisappear { arSession.stop() }
+        .onAppear {
+            arSession.start()
+            belt.start()
+        }
+        .onDisappear {
+            belt.stop()
+            arSession.stop()
+        }
     }
 }
 
