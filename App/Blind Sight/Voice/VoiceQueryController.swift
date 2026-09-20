@@ -16,11 +16,29 @@ import Combine
 
 @MainActor
 final class VoiceQueryController: ObservableObject {
+    /// One leg of the STT -> Gemini -> TTS chain, for the demo screen's "voice pipeline" readout.
+    enum PipelineStep {
+        case stt
+        case gemini
+        case tts
+    }
+
     @Published private(set) var isProcessing = false
     @Published private(set) var lastError: String?
     /// The most recent ElevenLabs TTS response, kept around so it can be replayed without
     /// re-running the whole STT -> Gemini -> TTS chain.
     @Published private(set) var lastResponseAudio: Data?
+    /// The step currently in flight, nil when idle or between runs.
+    @Published private(set) var activeStep: PipelineStep?
+    /// Steps finished in the run currently in flight (or just finished), reset at the start of
+    /// the next run — lets the UI show "done" for a step that's finished but not the newest one.
+    @Published private(set) var completedSteps: Set<PipelineStep> = []
+    @Published private(set) var sttDuration: TimeInterval?
+    /// True only while the answer audio is actually playing — distinct from `isProcessing`, which
+    /// also covers the STT/Gemini/TTS-synthesis work before any sound plays.
+    @Published private(set) var isSpeaking = false
+    @Published private(set) var lastQuestionText: String?
+    @Published private(set) var lastAnswerText: String?
 
     private let frameProvider: FrameProviding
     private let stt: ElevenLabsSTT
@@ -76,17 +94,37 @@ final class VoiceQueryController: ObservableObject {
     /// Runs entirely off the caller's thread via `Task` — never called from, or blocking,
     /// the ARSession delegate callback or the belt's UDP loop.
     private func runPipeline(audioURL: URL, frameJPEG: Data) async {
-        defer { isProcessing = false }
+        completedSteps = []
+        sttDuration = nil
+        defer {
+            isProcessing = false
+            activeStep = nil
+        }
 
         do {
+            activeStep = .stt
+            let sttStarted = Date()
             guard let transcript = try await stt.transcribe(fileURL: audioURL) else {
                 print("VoiceQueryController: empty transcript, stopping before Gemini")
                 return
             }
+            sttDuration = Date().timeIntervalSince(sttStarted)
+            completedSteps.insert(.stt)
+            lastQuestionText = transcript
 
+            activeStep = .gemini
             let answer = try await gemini.answer(question: transcript, frameJPEG: frameJPEG)
+            completedSteps.insert(.gemini)
+            lastAnswerText = answer
+
+            activeStep = .tts
             let audio = try await tts.synthesize(text: answer)
+            completedSteps.insert(.tts)
             lastResponseAudio = audio
+
+            activeStep = nil
+            isSpeaking = true
+            defer { isSpeaking = false }
             try await player.play(audio)
         } catch {
             report(error, context: "pipeline failed")
@@ -104,8 +142,12 @@ final class VoiceQueryController: ObservableObject {
         }
 
         isProcessing = true
+        isSpeaking = true
         Task {
-            defer { isProcessing = false }
+            defer {
+                isProcessing = false
+                isSpeaking = false
+            }
             do {
                 try await player.play(audio)
             } catch {

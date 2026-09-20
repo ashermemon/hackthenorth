@@ -108,4 +108,81 @@ nonisolated enum DepthProcessor {
         }
         return result
     }
+
+    /// One cell of a camera-image grid overlay (see `gridDistances`); nil `distance` with
+    /// `lowConfidenceOnly == false` means "no obstacle within `farMeters`," not "unknown."
+    nonisolated struct GridCell {
+        var distance: Float?
+        var lowConfidenceOnly: Bool
+    }
+
+    /// Nearest reliable obstacle distance in each cell of a `columns` x `rows` grid laid directly
+    /// over the camera image (row-major, top-left first) — for the depth-view demo overlay, not
+    /// the belt. Unlike `zoneDistances` (which buckets by *bearing*, for haptic zones), this
+    /// buckets by raw pixel position, since it's a literal grid drawn on top of the visible
+    /// frame. Reuses the same forward/side/height-gate/distance math as `zoneDistances` so the
+    /// numbers stay consistent with the belt's own zone readings, but reports a true per-cell
+    /// minimum instead of `zoneDistances`' histogram (cells are small; a coarse histogram isn't
+    /// needed to reject one noisy pixel — `minCellSamples` does that instead).
+    private static let minCellSamples = 3
+
+    static func gridDistances(_ s: DepthSnapshot, tuning t: BeltTuning, columns: Int, rows: Int) -> [GridCell] {
+        let cellCount = columns * rows
+        var result = [GridCell](repeating: GridCell(distance: nil, lowConfidenceOnly: false), count: cellCount)
+        let g = s.geometry
+        let m = g.cameraToWorld
+        let rightAxis = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
+        let upAxis = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
+        let backAxis = SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z)
+
+        var forward = SIMD3<Float>(-backAxis.x, 0, -backAxis.z)
+        let flatLength = simd_length(forward)
+        guard flatLength > 0.2 else { return result }
+        forward /= flatLength
+        let side = SIMD3<Float>(-forward.z, 0, forward.x)
+
+        let minHeight = -(t.cameraHeightMeters - t.groundClearanceMeters)
+        let maxHeight = t.overheadClearanceMeters
+        let step = max(1, t.sampleStride)
+        let columnFactor = (0..<s.width).map { (Float($0) - g.cx) / g.fx }
+
+        var rawCounts = [Int](repeating: 0, count: cellCount)
+        var acceptedCounts = [Int](repeating: 0, count: cellCount)
+        var nearest = [Float](repeating: .greatestFiniteMagnitude, count: cellCount)
+
+        for v in stride(from: 0, to: s.height, by: step) {
+            let rowFactor = -(Float(v) - g.cy) / g.fy
+            let row = min(rows - 1, v * rows / s.height)
+            for u in stride(from: 0, to: s.width, by: step) {
+                let index = v * s.width + u
+                let z = s.depth[index]
+                guard z.isFinite, z >= t.minRangeMeters else { continue }
+
+                let offset = rightAxis * (columnFactor[u] * z) + upAxis * (rowFactor * z) - backAxis * z
+                guard offset.y >= minHeight, offset.y <= maxHeight else { continue }
+                let ahead = simd_dot(offset, forward)
+                guard ahead > 0.05 else { continue }
+                let lateral = simd_dot(offset, side)
+                let distance = (ahead * ahead + lateral * lateral).squareRoot()
+                guard distance < t.farMeters else { continue }
+
+                let column = min(columns - 1, u * columns / s.width)
+                let cell = row * columns + column
+                rawCounts[cell] += 1
+
+                if let confidence = s.confidence, confidence[index] < t.minConfidence { continue }
+                acceptedCounts[cell] += 1
+                if distance < nearest[cell] { nearest[cell] = distance }
+            }
+        }
+
+        for cell in 0..<cellCount {
+            if acceptedCounts[cell] >= minCellSamples {
+                result[cell] = GridCell(distance: nearest[cell], lowConfidenceOnly: false)
+            } else if rawCounts[cell] > 0 {
+                result[cell] = GridCell(distance: nil, lowConfidenceOnly: true)
+            }
+        }
+        return result
+    }
 }
