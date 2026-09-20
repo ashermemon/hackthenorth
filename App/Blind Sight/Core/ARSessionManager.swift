@@ -44,13 +44,23 @@ final class ARSessionManager: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     // MARK: - ARSessionDelegate
+    //
+    // ARKit does not guarantee these fire on the main thread. `@Published` mutations must
+    // land on main (SwiftUI/Combine requirement), so every delegate callback hops explicitly
+    // rather than relying on whichever queue ARKit happens to call from. Keep these bodies
+    // cheap — anything slow here delays the next frame delivery, which the belt loop depends
+    // on running at a steady rate.
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        latestFrame = frame
-        trackingState = frame.camera.trackingState
+        DispatchQueue.main.async { [weak self] in
+            self?.latestFrame = frame
+            self?.trackingState = frame.camera.trackingState
+        }
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
-        isRunning = false
+        DispatchQueue.main.async { [weak self] in
+            self?.isRunning = false
+        }
     }
 }
