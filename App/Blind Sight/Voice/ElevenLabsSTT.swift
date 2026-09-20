@@ -16,9 +16,11 @@ struct ElevenLabsSTT {
     private let apiKey: String
     private let session: URLSession
 
-    /// ElevenLabs' STT model. Distinct from eleven_flash_v2_5 (a text-to-speech voice model,
-    /// used in ElevenLabsTTS.swift) — that ID is not valid on this endpoint.
-    private let model = "scribe_v1"
+    /// ElevenLabs' current flagship STT model for batch transcription (confirmed against
+    /// elevenlabs.io/docs/overview/models, 2026-09-20 — scribe_v1 is now noted there as
+    /// deprecated/outclassed by v2). Distinct from eleven_flash_v2_5 (a text-to-speech voice
+    /// model, used in ElevenLabsTTS.swift) — that ID is not valid on this endpoint.
+    private let model = "scribe_v2"
 
     init(apiKey: String = Secrets.elevenLabsAPIKey, session: URLSession = .shared) {
         self.apiKey = apiKey
