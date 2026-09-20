@@ -32,9 +32,13 @@ Zone value: `0` = motor off, `255` = strongest. Closer obstacle = higher value.
 ## Receiver rules (ESP32)
 
 - Ignore any datagram that is not exactly 6 bytes or whose byte 0 is not `0xB7`.
-- `seq` is diagnostic only (log gaps / loss). It is NOT used to reorder or reject
-  packets: reordering on a body-worn link is negligible, and a phone-app restart
-  resets `seq` to 0 and must not stall the belt.
+- A packet is applied only if its `seq` is newer than the last applied one, compared with
+  wraparound: `(int8_t)(seq - last) > 0` (a plain `>` breaks at 255 → 0). This drops reordered or
+  duplicate packets; it does not retry lost ones, since the next update supersedes them.
+  **Exception:** if nothing has been applied for `HOLD_MS`, the belt is already silent, so the
+  next valid packet is accepted whatever its `seq`. Without this, restarting the phone app
+  (`seq` back at 0) would leave the belt ignoring packets for up to 128 updates.
+  Implemented and unit-tested in `firmware/belt_fw/main/belt_protocol.c`.
 - Every valid packet replaces the whole 4-zone state.
 - No valid packet for `HOLD_MS` (default 500 ms) → all motors off.
 
