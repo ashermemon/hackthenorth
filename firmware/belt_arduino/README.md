@@ -23,15 +23,19 @@ which is git-ignored.
 
 **ESP32 (DOIT DevKit V1) → L298N**
 
-| Zone | ESP32 GPIO | L298N input | L298N output | Motor |
-|---|---|---|---|---|
-| 1 left hip | 33 | IN1 | OUT1 | OUT1 ↔ GND |
-| 2 left pocket | 25 | IN2 | OUT2 | OUT2 ↔ GND |
-| 3 right pocket | 26 | IN3 | OUT3 | OUT3 ↔ GND |
-| 4 right hip | 27 | IN4 | OUT4 | OUT4 ↔ GND |
+| Packet byte | Position on the belt | ESP32 GPIO |
+|---|---|---|
+| z0 | far left (left hip) | 25 |
+| z1 | inner left (left pocket) | 33 |
+| z2 | inner right (right pocket) | 27 |
+| z3 | far right (right hip) | 26 |
 
-Left and right are the wearer's. Each motor goes between one OUT terminal and the L298N's **GND**
-terminal (not between OUT1 and OUT2). Either polarity works; they only spin one way.
+Left and right are the wearer's. **This is the belt as built:** its motors sit in a different order
+from the original plan (which had GPIOs 33, 25, 26, 27 as far-left to far-right), so the table above
+is not in pin order. It is set in `BELT_ZONE_GPIOS` in `belt_config.h`; if you rewire a motor, fix it
+there and leave the app alone. GPIOs 33, 25, 26 and 27 go to the L298N inputs IN1 to IN4. Each motor
+goes between one OUT terminal and the L298N's **GND** terminal (not between OUT1 and OUT2). Either
+polarity works; they only spin one way.
 
 **Optional but recommended:** a 10 kΩ resistor from each IN pin to GND, so the motors stay off
 while the ESP32 boots or resets (the pins float until the firmware configures them).

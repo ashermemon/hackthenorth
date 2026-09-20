@@ -26,8 +26,12 @@
 #define BELT_HOLD_MS 500
 
 // ---- Motors --------------------------------------------------------------------------------
-// GPIOs wired to L298N IN1..IN4, in zone order: left hip, left pocket, right pocket, right hip.
-static const int BELT_ZONE_GPIOS[4] = {33, 25, 26, 27};
+// The GPIO that drives each zone's motor, in the order the app sends the four bytes (z0..z3):
+//   z0 far left (left hip), z1 inner left (left pocket), z2 inner right (right pocket), z3 far right (right hip).
+// The belt as built has its motors in a different order from the original plan (GPIOs 33, 25, 26, 27
+// drive, respectively, the inner-left, far-left, far-right and inner-right motors), so this table is
+// deliberately not in pin order. If a motor is ever rewired, change it here, never in the app.
+static const int BELT_ZONE_GPIOS[4] = {25, 33, 27, 26};
 
 // PWM carrier for the motor drive (not the pulse rate below). 10 kHz is above where PWM ripple is
 // felt, mostly above motor noise, and well within what the L298N (a slow driver) switches cleanly.
