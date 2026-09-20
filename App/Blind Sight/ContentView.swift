@@ -28,32 +28,29 @@ struct ContentView: View {
             Text(arSession.isRunning ? "Sensing active" : "Starting…")
                 .foregroundStyle(.secondary)
 
-            if #available(iOS 17.2, *) {
-                Text(recorder.isRecording ? "Listening…" : "Hold Volume Down to ask a question")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                // AVCaptureEventInteraction needs iOS 17.2+. Below that, this on-screen
-                // press-and-hold is the real trigger, not a debug stand-in — PRD's own
-                // stated mitigation for the hardware button being unavailable/unreliable.
-                Text(recorder.isRecording ? "Release to Send" : "Hold to Ask")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(recorder.isRecording ? Color.red : Color.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in recorder.start() }
-                            .onEnded { _ in
-                                let url = recorder.stop()
-                                #if DEBUG
-                                lastRecordingURL = url
-                                #endif
-                            }
-                    )
-            }
+            // Primary trigger: on-screen press-and-hold, not gated on iOS version. Confirmed
+            // on-device that AVCaptureEventInteraction (wired below via CaptureEventTrigger)
+            // does not reliably intercept Volume Down even with ARSession confirmed running
+            // and no errors — ARKit's capture pipeline likely doesn't register as "actively
+            // using the camera" the way a classic AVCaptureSession would, which is what this
+            // API appears to actually require. Not depending on it working.
+            Text(recorder.isRecording ? "Release to Send" : "Hold to Ask")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(recorder.isRecording ? Color.red : Color.accentColor)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in recorder.start() }
+                        .onEnded { _ in
+                            let url = recorder.stop()
+                            #if DEBUG
+                            lastRecordingURL = url
+                            #endif
+                        }
+                )
 
             #if DEBUG
             if let lastRecordingURL {
